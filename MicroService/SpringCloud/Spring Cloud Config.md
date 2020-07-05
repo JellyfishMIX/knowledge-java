@@ -42,6 +42,28 @@
 
 ![配合Spring Cloud Bus自动刷新配置](https://image-hosting.jellyfishmix.com/20200626024442.png)
 
+### pom.xml依赖
+
+config-server
+
+```xml
+<!--通知config-client拉取新配置-->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-bus-amqp</artifactId>
+</dependency>
+```
+
+config-client
+
+```xml
+<!--作为config-client拉取新配置-->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-bus-amqp</artifactId>
+</dependency>
+```
+
 ### bootstrap.yml配置
 
 需要暴露/actuator/bus-refresh这个endpoint，设置为暴露全部endpoints
@@ -81,6 +103,47 @@ git仓库工具webhook自动刷新请求路径
 `content type`设置为`application/json`
 
 ![截屏2020-06-26上午2.33.19](https://image-hosting.jellyfishmix.com/20200626024608.png)
+
+### @RefreshScope
+
+在配置变更后，需要同步使用最新配置的地方，加上@RefreshScope注解。如果不加，即使config-client拉取了最新配置，也没法应用最新的配置。
+
+application.yml
+
+```yml
+# Spring Cloud Bus演示使用
+girl:
+  name: lili
+  age: 19
+```
+
+GirlConfig.java
+
+```java
+@Data
+@Component
+@ConfigurationProperties("girl")
+@RefreshScope
+public class GirlConfig {
+    private String name;
+    private Integer age;
+}
+```
+
+GirlController.java
+
+```java
+@RestController
+public class GirlController {
+    @Autowired
+    private GirlConfig girlConfig;
+
+    @GetMapping("/girl/print")
+    public String print() {
+        return "name: " + girlConfig.getName() + "\nage: " + girlConfig.getAge();
+    }
+}
+```
 
 
 

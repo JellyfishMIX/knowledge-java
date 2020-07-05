@@ -146,6 +146,120 @@ SCS 是 Spring Integration 的加强，同时与 Spring Boot 体系进行了融�
 
 
 
+## 结合SpringBoot使用SpringCloudStream
+
+```yaml
+spring:
+  stream:
+    bindings:
+      myMessage:
+      	# 消息分组，避免多个服务实例同时接收到同样的消息
+        group: order
+        # 与RabbitMQ传输信息的时候，自动序列化/反序列化为json对象
+        content-type: application/json
+```
+
+StreamClient.java
+
+```java
+public interface StreamClient {
+    String EXCHANGE = "myMessage";
+    String EXCHANGE_FEEDBACK = "feedback";
+
+    // myMessage是绑定的Exchange名称。启动后自动创建一个Queue。
+    @Input(StreamClient.EXCHANGE)
+    SubscribableChannel input();
+
+    // myMessage是绑定的Exchange名称。启动后自动创建一个Queue。
+    @Output(StreamClient.EXCHANGE)
+    MessageChannel output();
+
+    // feedback是绑定的Exchange名称。启动后自动创建一个Queue。
+    @Input(StreamClient.EXCHANGE_FEEDBACK)
+    SubscribableChannel feedbackInput();
+
+    // feedback是绑定的Exchange名称。启动后自动创建一个Queue。
+    @Output(StreamClient.EXCHANGE_FEEDBACK)
+    MessageChannel feedbackOutput();
+}
+```
+
+StreamReceiver.java
+
+```java
+/**
+ * Spring Cloud Stream测试
+ */
+@Component
+@EnableBinding(StreamClient.class)
+@Slf4j
+public class StreamReceiver {
+    // @SteamListener默认状态下，不能有多个方法绑定同一个Channel，这样Channel会无法判断把Message送往哪个方法（初学时写下此注释，此说法存疑）
+
+    // /**
+    //  * 监听字符串信息
+    //  *
+    //  * @param message message
+    //  */
+    // @StreamListener(value = StreamClient.EXCHANGE)
+    // public void processString(Object message) {
+    //     log.info("StreamReceiver: {}", message);
+    // }
+
+    /**
+     * 监听OrderDTO信息，并使用@SendTo给出反馈
+     *
+     * @param message message
+     * @return
+     */
+    @StreamListener(value = StreamClient.EXCHANGE)
+    @SendTo(StreamClient.EXCHANGE_FEEDBACK)
+    public String processObject(OrderDTO message) {
+        log.info("StreamReceiver: {}", message);
+        return "received";
+    }
+
+    /**
+     * 监听反馈
+     *
+     * @param message message
+     */
+    @StreamListener(value = StreamClient.EXCHANGE_FEEDBACK)
+    public void processResponse(String message) {
+        log.info("Feedback: " + message);
+    }
+}
+```
+
+StreamSenderTest.java
+
+```java
+/**
+ * 发送Mq消息测试
+ */
+public class StreamSenderTest extends BrotherTakeawayOrderApplicationTests {
+    @Resource
+    private StreamClient streamClient;
+
+    @Test
+    @Disabled
+    void sendMessage() {
+        String message = "now: " + new Date();
+        streamClient.output().send(MessageBuilder.withPayload(message).build());
+    }
+
+    @Test
+    @Disabled
+    void sendObject() {
+        OrderDTO orderDTO = new OrderDTO();
+        orderDTO.setOrderId("123456");
+        streamClient.output().send(MessageBuilder.withPayload(orderDTO).build());
+    }
+}
+```
+
+
+
 ## 引用/参考
 
 [Spring Cloud Stream 体系及原理介绍 - Format's Notes](https://fangjian0423.github.io/2019/04/03/spring-cloud-stream-intro/)
